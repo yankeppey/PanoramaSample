@@ -1,1 +1,0 @@
-This is temporary project which will be moved soon to another one.
