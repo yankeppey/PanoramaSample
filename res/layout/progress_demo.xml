@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical" >
+    
+    <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_above="@+id/placeholder">
+            <com.android.camera.PanoProgressBar
+                    android:id="@+id/pano_pan_progress_bar"
+                    android:src="@drawable/ic_pan_progression"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+
+        <ImageView
+                android:id="@+id/pano_pan_left_indicator"
+                android:src="@drawable/pano_direction_left_indicator"
+                android:visibility="gone"
+                android:layout_marginRight="5dp"
+                android:layout_toLeftOf="@id/pano_pan_progress_bar"
+                android:layout_centerVertical="true"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+        <ImageView
+                android:id="@+id/pano_pan_right_indicator"
+                android:src="@drawable/pano_direction_right_indicator"
+                android:visibility="gone"
+                android:layout_marginLeft="5dp"
+                android:layout_toRightOf="@id/pano_pan_progress_bar"
+                android:layout_centerVertical="true"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+    </RelativeLayout>
+
+    <SurfaceView
+        android:id="@+id/surfaceView1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+
+</LinearLayout>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<qualifiedTypeNameHistroy>
+<fullyQualifiedTypeName name="com.android.camera.MosaicRenderer"/>
+<fullyQualifiedTypeName name="android.support.v4.app.Fragment"/>
+<fullyQualifiedTypeName name="android.view.LayoutInflater"/>
+<fullyQualifiedTypeName name="android.view.ViewGroup"/>
+<fullyQualifiedTypeName name="com.nv.camera.panorama.PanoramaFragment"/>
+<fullyQualifiedTypeName name="android.util.Log"/>
+<fullyQualifiedTypeName name="com.nv.camera.settings.PanoramaMode"/>
+<fullyQualifiedTypeName name="android.view.WindowManager"/>
+<fullyQualifiedTypeName name="android.view.Surface"/>
+<fullyQualifiedTypeName name="com.android.camera.Util"/>
+<fullyQualifiedTypeName name="com.nv.camera.panorama.ui.Rotatable"/>
+<fullyQualifiedTypeName name="com.nv.camera.panorama.ui.RotateLayout"/>
+<fullyQualifiedTypeName name="com.nv.camera.R"/>
+<fullyQualifiedTypeName name="android.media.MediaActionSound"/>
+<fullyQualifiedTypeName name="android.app.Activity"/>
+</qualifiedTypeNameHistroy>

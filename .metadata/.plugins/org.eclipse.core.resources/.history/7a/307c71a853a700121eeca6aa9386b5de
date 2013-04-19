@@ -1,0 +1,240 @@
+
+package com.nv.camera.settings;
+
+import android.hardware.Camera;
+import android.hardware.Camera.Parameters;
+import android.os.Build;
+import android.util.Log;
+
+import com.nv.camera.CaptureActivity;
+import com.nv.camera.utils.CameraHolder;
+import com.nv.camera.utils.CameraManager.CameraProxy;
+import com.nv.camera.utils.CameraParameters;
+import com.nv.camera.utils.FeatureManager;
+import com.nv.camera.utils.TegraDetector;
+
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+public class CameraModeManager {
+
+    private static final String TAG = CameraModeManager.class.getSimpleName();
+
+    public static final boolean RUNNING_JB = Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN;
+
+    public static final boolean RUNNING_JB_MR1 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1;
+
+    public static final boolean MANUFACTURER_NVIDIA = Build.MANUFACTURER.contains("NVIDIA");
+    
+    public static boolean FACE_DETECTION_SUPPORTED = false;
+
+    private Set<Mode> mUnsupportedModes = new HashSet<Mode>();
+
+    private Mode mCurrentMode;
+
+    private AbstractMode mCurrentIMode;
+
+    public enum Mode {
+
+        GENERAL(GeneralMode.class),
+
+        BIG_BUTTON(BigButtonMode.class),
+
+        SLOW_BURST(SlowBurstSoft.class),
+
+        FAST_BURST(FastBurstNV.class),
+
+        CONTINUES_BURST(ContinuesBurstMode.class),
+
+        TIMER(TimerMode.class),
+
+        INTERVAL(IntervalMode.class),
+
+        HDR(HDR.class),
+
+        PANOPAINT(PanoPaintMode.class),
+        
+        PANOSPHERE(PanoSphericalMode.class),
+        
+        PANOCYLINDER(PanoCylindricalMode.class),
+
+        TAP_TO_TRACK(TapToTrackMode.class),
+
+        GENERAL_VIDEO(VideoMode.class),
+        
+        STABILIZATION_VIDEO(AntishakeVideo.class),
+        
+        SLOW_MO_VIDEO(SlowMoVideo.class),
+        
+        NVANTISHAKE(NVAntishake.class),
+        
+        ANTISHAKE(Antishake.class), 
+        
+        PANORAMA(PanoramaMode.class);
+
+        private final Class<? extends AbstractMode> modeClass;
+
+        private Mode(Class<? extends AbstractMode> iModeClass) {
+            modeClass = iModeClass;
+        }
+
+        Class<? extends AbstractMode> getIModeClass() {
+            return modeClass;
+        }
+
+    }
+
+    private boolean mModesChecked = false;
+
+    public CameraModeManager() {
+        Log.d(TAG, String.format("Current SDK INT is %d, requierd is %d : %b",
+                Build.VERSION.SDK_INT, Build.VERSION_CODES.JELLY_BEAN_MR1, RUNNING_JB));
+        Log.d(TAG, String.format("Current MANUFACTURER is %s, requierd is %s : %b",
+                Build.MANUFACTURER, "NVIDIA", MANUFACTURER_NVIDIA));
+    }
+
+    public void checkSupportedModes() {
+        mUnsupportedModes.clear();
+        checkSlowBurstMode();
+        checkFastBurstMode();
+        checkContinuesBurstMode();
+        checkHDRMode();
+        checkPanopaintMode();
+        checkTapToTrackMode();
+        checkPhotoStabilizationMode();
+        checkSlowMoMode();
+        mModesChecked = true;
+    }
+
+    public boolean isModesChecked() {
+        return mModesChecked;
+    }
+
+    private void checkSlowMoMode() {
+        boolean supported = MANUFACTURER_NVIDIA && TegraDetector.isTegra3Plus();
+        if (!supported) {
+            mUnsupportedModes.add(Mode.SLOW_MO_VIDEO);
+        }
+    }
+    
+    private void checkSlowBurstMode() {
+        boolean supported = !MANUFACTURER_NVIDIA || (RUNNING_JB && !RUNNING_JB_MR1);
+        if (!supported) {
+            mUnsupportedModes.add(Mode.SLOW_BURST);
+        }
+    }
+
+    private void checkPhotoStabilizationMode() {
+    	boolean supported = MANUFACTURER_NVIDIA && RUNNING_JB_MR1;
+    	if (!supported) {
+    		mUnsupportedModes.add(Mode.NVANTISHAKE);
+    	} 
+    	List<String> allSceneModes = Arrays.asList(FeatureManager.getInstance().getSupportedValues(FeatureManager.SCENE_MODE));
+    	 
+    	if (supported || allSceneModes == null || !allSceneModes.contains(Parameters.SCENE_MODE_STEADYPHOTO)) {
+    		mUnsupportedModes.add(Mode.ANTISHAKE);
+    	}
+    }
+    
+    private void checkFastBurstMode() {
+        boolean supported = MANUFACTURER_NVIDIA && RUNNING_JB_MR1;
+        if (!supported) {
+            mUnsupportedModes.add(Mode.FAST_BURST);
+        }
+    }
+
+    private void checkContinuesBurstMode() {
+        boolean supported = MANUFACTURER_NVIDIA && RUNNING_JB_MR1;
+        if (!supported) {
+            mUnsupportedModes.add(Mode.CONTINUES_BURST);
+            return;
+        }
+
+        CameraProxy camera = CameraHolder.getInstance().getCurrentCamera();
+        if (camera == null) {
+            throw new IllegalStateException("Camera should be opened up to this time");
+        }
+
+        if (!camera.getCamera().isNvCamera()) {
+            mUnsupportedModes.add(Mode.CONTINUES_BURST);
+        }
+    }
+
+    private void checkPanopaintMode() {
+        boolean supported = MANUFACTURER_NVIDIA && TegraDetector.isTegra4();
+        if (!supported) {
+            mUnsupportedModes.add(Mode.PANOPAINT);
+            mUnsupportedModes.add(Mode.PANOSPHERE);
+            mUnsupportedModes.add(Mode.PANOCYLINDER);
+        }
+    }
+
+    private void checkTapToTrackMode() {
+        boolean supported = MANUFACTURER_NVIDIA && TegraDetector.isTegra3Plus();
+        if (!supported) {
+            mUnsupportedModes.add(Mode.TAP_TO_TRACK);
+        }
+    }
+
+    private void checkHDRMode() {
+    	// we doesn't support this mode on tegra4 devices. 
+    	// Tegra 3 devices have standard android HDR too.
+    	if (TegraDetector.isTegra4()) {
+            mUnsupportedModes.add(Mode.HDR);
+            return;
+        }
+
+        CameraProxy camera = CameraHolder.getInstance().getCurrentCamera();
+        if (camera == null) {
+            throw new IllegalStateException("Camera should be opened up to this time");
+        }
+
+        CameraParameters cameraParameters = camera.getParameters();
+        List<String> sceneModes = cameraParameters.getSupportedSceneModes();
+        if (sceneModes == null || !sceneModes.contains(Camera.Parameters.SCENE_MODE_HDR)) {
+            mUnsupportedModes.add(Mode.HDR);
+        }
+    }
+
+    public Mode getCurrentMode() {
+        return mCurrentMode;
+    }
+
+    public AbstractMode getCurrentIMode() {
+        return mCurrentIMode;
+    }
+
+    public void setCurrentMode(CaptureActivity activity, Mode mode) {
+        if (mUnsupportedModes.contains(mode)) {
+            throw new IllegalStateException("You are trying to set unsupported mode");
+        }
+
+        try {
+            mCurrentMode = mode;
+            mCurrentIMode = mCurrentMode.getIModeClass().newInstance();
+            FACE_DETECTION_SUPPORTED = mCurrentIMode.isFaceDetectionSupported();
+            mCurrentIMode.setup(activity);
+        } catch (InstantiationException e) {
+            throw new IllegalStateException(
+                    "The class extending IMode must have constructor with no parameters", e);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException(
+                    "The class extending IMode must have public constructor", e);
+        }
+    }
+
+    public void clearCurrentMode(CaptureActivity activity) {
+        if (mCurrentIMode != null) {
+            mCurrentMode = null;
+            mCurrentIMode.unload();
+            mCurrentIMode = null;
+        }
+    }
+
+    public boolean isModeSupported(Mode mode) {
+        return !mUnsupportedModes.contains(mode);
+    }
+
+}

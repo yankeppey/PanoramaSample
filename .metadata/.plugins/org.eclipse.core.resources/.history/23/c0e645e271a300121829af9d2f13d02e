@@ -1,0 +1,1046 @@
+package com.nv.camera;
+
+import android.app.Activity;
+import android.app.Fragment;
+import android.app.FragmentManager;
+import android.app.FragmentTransaction;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.hardware.Camera.Parameters;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.View.OnTouchListener;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.ArrayAdapter;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.ListPopupWindow;
+import android.widget.TextView;
+
+import com.android.camera.MosaicRenderer;
+import com.nv.camera.fragments.CompositionFragment;
+import com.nv.camera.fragments.FaceDetectionFragment;
+import com.nv.camera.fragments.FocusExposureOnTapFragment;
+import com.nv.camera.fragments.HorizonFragment;
+import com.nv.camera.settings.AbstractMode;
+import com.nv.camera.settings.CameraModeManager;
+import com.nv.camera.settings.CameraModeManager.Mode;
+import com.nv.camera.social.Keys;
+import com.nv.camera.utils.CameraHolder;
+import com.nv.camera.utils.CameraHolder.OnCameraOpenedListener;
+import com.nv.camera.utils.CommonUtils;
+import com.nv.camera.utils.Device;
+import com.nv.camera.utils.FeatureManager;
+import com.nv.camera.utils.FeatureManager.Transaction;
+import com.nv.camera.utils.SaveUtils;
+import com.nv.camera.utils.SaveUtils.ImageSaver;
+import com.nv.camera.view.ModeTitleToast;
+import com.nv.camera.view.MultiSwitchButton;
+import com.nv.camera.view.MultiSwitchButton.OnSwitchListener;
+import com.nv.camera.view.MultiSwitchButton.Variant;
+import com.nv.camera.view.Optionable;
+import com.nv.camera.view.Optionable.OnOptionSelectedListener;
+import com.nv.camera.view.Optionable.Option;
+import com.nv.camera.view.VerticalPseudoSwitch;
+import com.nv.camera.view.VerticalPseudoSwitch.OnCheckedListener;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+
+public class CaptureActivity extends Activity implements OnOptionSelectedListener, OnCheckedListener, OnCameraOpenedListener, OnSwitchListener {
+
+    private static final String TAG = CaptureActivity.class.getSimpleName();
+    
+    private static final String STATE_IS_VIDEO_MODE = "state-is-video-mode";
+    
+    private static final String STATE_LAST_SELECTED_MODE = "state-last-selected-mode";
+    
+    private static class ModeOption implements Option {
+        
+        private final Mode mMode;
+        
+        private final int mResIconSmall;
+        
+        private final int mResIconBig;
+        
+        private final int mResTitle;
+        
+        ModeOption(Mode mode, int resIconSmall, int resIconBig, int resTitle) {
+            if (mode == null || resIconSmall == 0 || resIconBig == 0 || resTitle == 0) {
+                throw new IllegalArgumentException("Please provide valid resource ids");
+            }
+            mMode = mode;
+            mResIconSmall = resIconSmall;
+            mResIconBig = resIconBig;
+            mResTitle = resTitle;
+        }
+        
+        Mode getMode() {
+            return mMode;
+        }
+        
+        @Override
+        public int getIconResourceId() {
+            return mResIconSmall;
+        }
+        
+        int getBigIconResourceId() {
+            return mResIconBig;
+        }
+        
+        int getTitleResourceId() {
+            return mResTitle;
+        }
+        
+    }
+    
+    private static final ModeOption[] CAMERA_OPTIONS = {
+        new ModeOption(Mode.GENERAL, R.drawable.icon_30_camera_selector, R.drawable.icon_36_camera, R.string.general_cam_mode),
+        new ModeOption(Mode.BIG_BUTTON, R.drawable.icon_30_bigbutton_selector, R.drawable.icon_36_bigbutton, R.string.big_button_cam_mode),
+        new ModeOption(Mode.SLOW_BURST, R.drawable.icon_30_burstlow_selector, R.drawable.icon_36_burstlow, R.string.slow_burst_cam_mode),
+        new ModeOption(Mode.FAST_BURST, R.drawable.icon_30_bursthigh_selector, R.drawable.icon_36_bursthigh, R.string.fast_burst_cam_mode),
+        new ModeOption(Mode.HDR, R.drawable.icon_30_hdr_selector, R.drawable.icon_36_hdr, R.string.hdr_cam_mode),
+        new ModeOption(Mode.PANOPAINT, R.drawable.icon_30_panapaint_selector, R.drawable.icon_36_panapaint, R.string.panapaint_cam_mode),
+        new ModeOption(Mode.PANOSPHERE, R.drawable.icon_30_panapaint_selector, R.drawable.icon_36_panapaint, R.string.panapaint_cam_mode),
+        new ModeOption(Mode.PANOCYLINDER, R.drawable.icon_30_panapaint_selector, R.drawable.icon_36_panapaint, R.string.panapaint_cam_mode),
+        new ModeOption(Mode.TAP_TO_TRACK, R.drawable.icon_30_taptotrack_selector, R.drawable.icon_36_taptotrack, R.string.tap_to_track_cam_mode),
+        new ModeOption(Mode.TIMER, R.drawable.icon_30_timer_selector, R.drawable.icon_36_timer, R.string.timer_cam_mode),
+        new ModeOption(Mode.INTERVAL, R.drawable.icon_30_timelapse_selector, R.drawable.icon_36_timelapse, R.string.interval_cam_mode),
+        new ModeOption(Mode.CONTINUES_BURST, R.drawable.icon_30_bursthigh_selector, R.drawable.icon_36_bursthigh, R.string.continues_burst_mode),
+        new ModeOption(Mode.NVANTISHAKE, R.drawable.icon_30_antishake_selector, R.drawable.icon_36_antishake, R.string.nv_antishake),
+        new ModeOption(Mode.ANTISHAKE, R.drawable.icon_30_antishake_selector, R.drawable.icon_36_antishake, R.string.antishake)
+    };
+    
+    private static final ModeOption[] VIDEO_OPTIONS = {
+        new ModeOption(Mode.GENERAL_VIDEO, R.drawable.icon_30_video_selector, R.drawable.icon_36_videoled_ipad, R.string.general_video_mode),
+        new ModeOption(Mode.STABILIZATION_VIDEO, R.drawable.icon_30_antishake_selector, R.drawable.icon_36_antishake, R.string.stabilization_video_mode)
+    };
+    
+    private CameraModeManager mCameraModeManager = new CameraModeManager();
+
+	private View mRoot;
+    
+	private Fragment mModeFragment;
+	
+	private Fragment mPreCurrentFace;
+	
+	private Fragment mFaceDetectionFragment;
+	
+	//private MultiSwitchButton mFaceDetectionButton;
+	
+    private ImageButton mCaptureButton;
+    
+    ImageButton mOptionBarButton;
+
+    private ImageView mThumbDisplay;
+
+    Optionable mOptionable;
+    
+    private ImageView mBigButton;
+    
+    private ImageButton mXFunctions;
+    
+    private ImageButton mSwitchCompositionButton;
+    
+    private TextView mVideoTimerView;
+    
+    View mVideoSwitchLayout;
+    
+    private VerticalPseudoSwitch mVideoSwitch;
+    
+    View mTimerVisibilityContainer;
+
+    private CaptureActivityMediator mMediator;
+
+    private ThumbnailLoader mThumbnailLoader;
+    
+    private MultiSwitchButton mFlashLightModeButton;
+    
+    private ImageButton mSwapCameraButton;
+    
+    private boolean mIsVideoMode = false;
+    
+    private Mode mLastSelectedMode = null;
+    
+    // Horizon stuff.
+    private boolean isHorizonActivated = false;
+    private Fragment mHorizonFragment;
+    
+    private CompositionFragment mCompositionFragment;
+    
+    private Transaction mSceneModeSwitchTransaction;
+    
+    // ImageSaver
+    private ImageSaver mImageSaver;
+    
+    private CaptureActivitySettingsFrame mSettingsFrame;
+    
+    private View mCloseOptionbarOverlay;
+    
+    private boolean mBlockUserInteraction = true;
+        
+    ModeTitleToast mModeTitleToast;
+    
+    public Fragment getModeFragment() {
+    	return mModeFragment;
+    }
+    
+    public void setModeFragment(Fragment fragment) {
+    	mModeFragment = fragment;
+    }
+    
+    public static void startClearTop(Context context) {
+        Intent intent = new Intent(context, CaptureActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        context.startActivity(intent);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        MosaicRenderer.init();
+        if (Device.isPhone()) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        } else {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR);
+        }
+        setContentView(R.layout.activity_capture);
+        restoreState(savedInstanceState);
+        initViews();
+        mMediator = CaptureActivityMediator.Factory.getMediator(this);
+        // set on camera listener
+        CameraHolder.getInstance().addOnCameraOpenedListener(this);
+        // The initial Mode is 'GENERAL'
+        mCameraModeManager.setCurrentMode(this, Mode.GENERAL);
+        // Initialize keys for social media
+        Keys.initialize();
+    }
+    
+    private void restoreState(Bundle savedInstanceState) {
+        if (savedInstanceState != null) {
+            mIsVideoMode = savedInstanceState.getBoolean(STATE_IS_VIDEO_MODE);
+            mLastSelectedMode = (Mode) savedInstanceState.getSerializable(STATE_LAST_SELECTED_MODE);
+        }
+    }
+
+    private void initViews() {
+        mRoot = findViewById(R.id.root);
+        mRoot.setOnTouchListener(mRootTouchListener);
+        mFlashLightModeButton = (MultiSwitchButton) findViewById(R.id.btn_flashlight_mode);
+        mFlashLightModeButton.setOnClickListener(mMultiSwitchClickListener);
+        //mFaceDetectionButton = (MultiSwitchButton) findViewById(R.id.btn_face_detection);
+        //mFaceDetectionButton.setOnClickListener(mMultiSwitchClickListener);
+        mFlashLightModeButton.addOnSwitchListener(this);
+        mCaptureButton = (ImageButton) findViewById(R.id.btn_capture);
+        mCaptureButton.setOnTouchListener(mCaptureButtonTouchListener);
+        mOptionBarButton = (ImageButton) findViewById(R.id.btn_optionbar);
+        mOptionBarButton.setOnClickListener(mOptionBarButtonClickListener);
+        mThumbDisplay = (ImageView) findViewById(R.id.camerabar_thumbdisplay);
+        mThumbDisplay.setOnClickListener(mThumbnailClickListener);
+        mOptionable = (Optionable) findViewById(R.id.optionbar);
+        mOptionable.setOnOptionSelectedListener(this);
+        mBigButton = (ImageView) findViewById(R.id.big_button);
+        mSwapCameraButton = (ImageButton) findViewById(R.id.btn_camera_swap);
+        setBigButtonVisibility(false);
+        mVideoTimerView = (TextView) findViewById(R.id.video_timer);
+        mVideoTimerView.setVisibility(View.INVISIBLE);
+        mVideoSwitchLayout = (View) findViewById(R.id.video_switch_layout);
+        mVideoSwitch = (VerticalPseudoSwitch) findViewById(R.id.video_switch);
+        mVideoSwitch.setChecked(mIsVideoMode);
+        mVideoSwitch.setOnCheckedListener(new BlockingCheckedListener(this));
+        mTimerVisibilityContainer = findViewById(R.id.timer_visibility_container);
+        mThumbnailLoader = new ThumbnailLoader(this, mThumbDisplay);
+        mThumbnailLoader.registerReceiver();
+        View settingsFrameView = findViewById(R.id.settings_frame);
+        mSettingsFrame = new CaptureActivitySettingsFrame(this, settingsFrameView);
+        // setup composition switcher
+        mSwitchCompositionButton = (ImageButton) findViewById(R.id.btn_grid);
+        mSwitchCompositionButton.setOnClickListener(mSwitchCompositionClickListener);
+        // setup pre-capture filters
+        mXFunctions = (ImageButton) findViewById(R.id.btn_function_x);
+        mXFunctions.setOnClickListener(mXFunctionsClickListener);
+        // Hide/Show 'swap camera' button.
+        // Depends of number of cameras.
+        if (CameraHolder.getInstance().getNumberOfCameras() < 2) {
+        	mSwapCameraButton.setVisibility(View.GONE);
+        }
+        mCloseOptionbarOverlay = findViewById(R.id.close_optionbar_overlay);
+        mCloseOptionbarOverlay.setOnTouchListener(mCloseOptionbarTouchListener);
+    }
+    
+    // pre-capture mode filters resource dictionary: key is effect name and value is two integer values
+    // {titleId, iconId}
+    private Map<String, Integer[]> mEffectsDicionary = new TreeMap<String, Integer[]>() {{
+    	put(Parameters.EFFECT_NONE, new Integer[] {R.string.effect_none, R.drawable.effect_none});
+    	put(Parameters.EFFECT_MONO, new Integer[] {R.string.effect_mono, R.drawable.effect_mono});
+    	put(Parameters.EFFECT_NEGATIVE, new Integer[] {R.string.effect_negative, R.drawable.effect_negative});
+    	put(Parameters.EFFECT_SOLARIZE, new Integer[] {R.string.effect_solarize, R.drawable.effect_solarize});
+    	put(Parameters.EFFECT_SEPIA, new Integer[] {R.string.effect_sepia, R.drawable.effect_sepia});
+    	put(Parameters.EFFECT_POSTERIZE, new Integer[] {R.string.effect_posterize, R.drawable.effect_posterize});
+    	put(Parameters.EFFECT_BLACKBOARD, new Integer[] {R.string.effect_blackboard, R.drawable.effect_blackboard});
+    	put(Parameters.EFFECT_AQUA, new Integer[] {R.string.effect_aqua, R.drawable.effect_aqua});
+    }};
+    
+    
+    /**
+     * This class contain things to visualize and change pre-capture filters.
+     * @author Alexey Saphonov
+     *
+     */
+    private class PreCaptureFilter {
+    	private int mTextResourceId;
+    	private int mIconResourceId;
+    	private String mEffect;
+    	
+    	private String mTitle;
+    	
+    	public PreCaptureFilter(int titleId, int iconId, String sceneMode) {
+    		mTextResourceId = titleId;
+    		mIconResourceId = iconId;
+    		mEffect = sceneMode;
+		}
+    	
+    	public String getTitle() {
+    		if (mTitle == null) {
+    			mTitle = (String)CaptureActivity.this.getText(mTextResourceId);
+    		}
+    		return mTitle;
+    	}
+    	
+    	public int getIconId() {
+    		return mIconResourceId;
+    	}
+    	
+    	public String getEffect() {
+    		return mEffect;
+    	}
+    	
+    	public void switchTo() {
+    		if (mSceneModeSwitchTransaction == null) {
+    			mSceneModeSwitchTransaction = FeatureManager.getInstance().createTransaction();
+    		}
+    		mSceneModeSwitchTransaction.begin()
+    		.add(FeatureManager.EFFECT, mEffect)
+    		.commit();
+    	}
+    }
+    
+    // this stores all available precapture effects
+    private final List<PreCaptureFilter> mPreCaptureEffects = new ArrayList<PreCaptureFilter>();
+    private String mCurrentPreCaptureEffect = null;
+    
+    private class PreCaptureAdapter extends ArrayAdapter<PreCaptureFilter> {
+    	
+    	private LayoutInflater mInflater;
+    	
+    	public PreCaptureAdapter(List<PreCaptureFilter> values) {
+			super(CaptureActivity.this, R.layout.composition_row, mPreCaptureEffects);
+			mInflater = LayoutInflater.from(CaptureActivity.this);
+		}
+
+		@Override
+    	public View getView(int position, View convertView, ViewGroup parent) {
+    		View resultView = convertView;
+    		if (resultView == null) {
+    			resultView = mInflater.inflate(R.layout.composition_row, null);
+    		}
+    		ImageView icon = (ImageView) resultView.findViewById(R.id.icon);
+    		TextView title = (TextView) resultView.findViewById(R.id.title);
+    		
+    		PreCaptureFilter f = mPreCaptureEffects.get(position);
+    		
+    		icon.setImageResource(f.getIconId());
+    		title.setText(f.getTitle());
+    		
+    		boolean activated = mCurrentPreCaptureEffect != null && !mCurrentPreCaptureEffect.isEmpty() && mCurrentPreCaptureEffect.equals(f.getEffect());
+//    		Log.d(TAG, "item " + f.getTitle() + " is activated : " + activated);
+    		resultView.setActivated(activated);
+    		
+    		return resultView;
+    	}
+
+		@Override
+		public int getCount() {
+			return mPreCaptureEffects.size();
+		}
+
+		@Override
+		public PreCaptureFilter getItem(int position) {
+			return mPreCaptureEffects.get(position);
+		}
+
+		@Override
+		public long getItemId(int position) {
+			return position;
+		}
+    }
+    
+    /**
+     * This class contains ultimate description for composition. It includes: menu icon, composition background
+     * and id of the resource string for menu selection.
+     * @author Alexey Saphonov
+     */
+    private class Composition {
+    	private int mIconResourceId;
+    	private int mTextResourceId;
+    	private int mCompositionResourceId;
+    	
+    	private String mTitle;
+    	
+    	public Composition(int icon, int text, int composition) {
+			mIconResourceId = icon;
+			mTextResourceId = text;
+			mCompositionResourceId = composition;
+		}
+    	
+    	public int getCompositionResourceId() {
+    		return mCompositionResourceId;
+    	}
+    	
+    	public String getTitle() {
+    		if (mTitle == null) {
+    			mTitle = (String)CaptureActivity.this.getText(mTextResourceId);
+    		}
+    		return mTitle;
+    	}
+    	
+    	public int getIconId() {
+    		return mIconResourceId;
+    	}
+    	
+    	public void switchTo() {
+    		if (mCompositionFragment == null) {
+    			mCompositionFragment = new CompositionFragment();
+    			FragmentManager fragmentManager = getFragmentManager();
+    			FragmentTransaction transaction = fragmentManager.beginTransaction();
+    			transaction.add(R.id.composition_holder, mCompositionFragment, "mCompositionFragment");
+    			transaction.commit();
+    		}
+    		mCompositionFragment.setResourceId(getCompositionResourceId(), true);
+    		
+    	}
+    }
+    
+    // store all the available composition modes
+    private final List<Composition> mCompositions = new ArrayList<Composition>() {{
+//    	add(new Composition(R.drawable.composition_btn_square_selector, R.string.composition_none, -1)); // None
+    	add(new Composition(R.drawable.composition_btn_square_selector, R.string.composition_square, R.drawable.composition_overlay_grid_square_ipad)); // Square
+    	add(new Composition(R.drawable.composition_btn_golden_selector, R.string.composition_golden, R.drawable.composition_overlay_grid_golden_ipad)); // Golden
+    	add(new Composition(R.drawable.composition_btn_thirds_selector, R.string.composition_thirds, R.drawable.composition_overlay_grid_thirds_ipad)); // Thirds
+    	add(new Composition(R.drawable.composition_btn_trisec_selector, R.string.composition_trisec, R.drawable.composition_overlay_grid_triangles_ipad)); // Trisec
+    }};
+    
+    /**
+     * This class represents adapter for composition list visualization.
+     * @author Alexey Saphonov
+     */
+    private class CompositionAdapter extends ArrayAdapter<Composition> {
+    	
+    	private LayoutInflater mInflater;
+    	
+    	public CompositionAdapter(List<Composition> values) {
+			super(CaptureActivity.this, R.layout.composition_row, mCompositions);
+			mInflater = LayoutInflater.from(CaptureActivity.this);
+//    		super(CaptureActivity.this, android.R.layout.simple_list_item_1, android.R.id.text1, values);
+		}
+
+		@Override
+    	public View getView(int position, View convertView, ViewGroup parent) {
+    		View resultView = convertView;
+    		if (resultView == null) {
+    			resultView = mInflater.inflate(R.layout.composition_row, null);
+    		}
+    		ImageView icon = (ImageView) resultView.findViewById(R.id.icon);
+    		TextView title = (TextView) resultView.findViewById(R.id.title);
+    		
+    		Composition c = mCompositions.get(position);
+    		
+    		icon.setImageResource(c.getIconId());
+    		title.setText(c.getTitle());
+    		
+    		boolean activated = (mCompositionFragment != null) && (c.getCompositionResourceId() == mCompositionFragment.getCurrentCompositionId());
+//    		Log.d(TAG, "item " + c.getTitle() + " is activated : " + activated);
+    		resultView.setActivated(activated);
+    		
+    		return resultView;
+    	}
+
+		@Override
+		public int getCount() {
+			return mCompositions.size();
+		}
+
+		@Override
+		public Composition getItem(int position) {
+			return mCompositions.get(position);
+		}
+
+		@Override
+		public long getItemId(int position) {
+			return position;
+		}
+    }
+    
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mThumbnailLoader.unregisterReceiver();
+        CameraHolder.getInstance().removeOnCameraOpenedListener(this);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mCameraModeManager.isModesChecked()) {
+            fillOptionBar();
+        }
+        /*CameraHolder.getInstance().postForOpenedCamera(new Runnable() {
+			@Override
+			public void run() {
+				// TODO Auto-generated method stub
+				
+			}
+		});*/
+        //mFaceDetectionButton.setVariant(FeatureManager.getInstance().getFaceDetectionState() ? "on" : "off");
+        
+        // reload thumbnail
+        mThumbnailLoader.updateThumbnail();
+        
+        // get ImageSaver
+        mImageSaver = SaveUtils.ImageSaver.getInstance();
+    }
+    
+    @Override
+    public void onCameraOpened() {
+        if (!mCameraModeManager.isModesChecked()) {
+            mCameraModeManager.checkSupportedModes();
+            fillOptionBar();
+        }
+        checkPreCaptureFilters();
+        checkComposition();
+        initFlashLightMode();
+        //initFaceDetection();
+        AbstractMode mode = mCameraModeManager.getCurrentIMode();
+        if (mode == null) {
+        	mCameraModeManager.setCurrentMode(this, Mode.GENERAL);
+        }
+        enableFaceDetection(mCameraModeManager.getCurrentIMode().isFaceDetectionSupported());
+        mSettingsFrame.init();
+        blockUserInteraction(false);
+    }
+    
+    /**
+     * This method checks does device have any effect supported. If it doesn't then we hide effect switch button.
+     * If it has then we show effect switch button. I assume that device may have effects on one of its cameras and 
+     * hasn't on other. So we check it every time you switch between your cameras.
+     */
+    private void checkPreCaptureFilters() {
+    	Log.d(TAG, "Supported color effects values presented " + (FeatureManager.getInstance().getSupporedColorEffects() != null));
+    	if (FeatureManager.getInstance().getSupporedColorEffects() != null) {
+    		for (String effect : FeatureManager.getInstance().getSupporedColorEffects()) {
+    			Log.d(TAG, "--> " + effect);
+    		}
+    	}
+    	
+    	// Suppose that it always has at least one effect EFFECT_NONE.
+    	if ((FeatureManager.getInstance().getSupporedColorEffects() == null) || (FeatureManager.getInstance().getSupportedValues(FeatureManager.EFFECT).length == 1)) {
+    		mXFunctions.setVisibility(View.GONE);
+    	} else {
+    		mXFunctions.setVisibility(View.VISIBLE);
+    		if (!FeatureManager.getInstance().getCachedParameter(FeatureManager.EFFECT).equals(Parameters.EFFECT_NONE)) {
+    			mXFunctions.setActivated(true);
+    		} else {
+    			mXFunctions.setActivated(false);
+    		}
+    	}
+    }
+    
+    /**
+     * This method checks composition state on the screen and highlight the composition button if composition is in use.
+     */
+    private void checkComposition() {
+    	if ((mCompositionFragment != null) && (mCompositionFragment.getPlanedCompositionId() != -1)) {
+			mSwitchCompositionButton.setActivated(true);
+		} else {
+			mSwitchCompositionButton.setActivated(false);
+		}
+    }
+    
+    // switchToCameraView() is called in onCreate()
+    // -> camera surface is created
+    // -> this method is called
+    public void fillOptionBar() {
+        mOptionable.removeAllOptions();
+        if (mIsVideoMode) {
+            addModes(VIDEO_OPTIONS);
+        } else {
+            addModes(CAMERA_OPTIONS);
+        }
+    }
+    
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        outState.putBoolean(STATE_IS_VIDEO_MODE, mIsVideoMode);
+        outState.putSerializable(STATE_LAST_SELECTED_MODE, mCameraModeManager.getCurrentMode());
+        super.onSaveInstanceState(outState);
+    }
+    
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mCameraModeManager.clearCurrentMode(this);
+    }
+    
+    private void addModes(ModeOption[] modeOptions) {
+        boolean anyOptionSelected = false;
+        ModeOption firstSupportedOption = null;
+        for (ModeOption modeOption : modeOptions) {
+            if (mCameraModeManager.isModeSupported(modeOption.getMode())) {
+                mOptionable.addOption(modeOption);
+                if (firstSupportedOption == null) {
+                    firstSupportedOption = modeOption;
+                }
+                if (modeOption.getMode().equals(mLastSelectedMode)) {
+                    mOptionable.selectOption(modeOption);
+                    anyOptionSelected = true;
+                }
+            }
+        }
+        if (!anyOptionSelected && firstSupportedOption != null) {
+            mOptionable.selectOption(firstSupportedOption);
+        }
+    }
+
+    @Override
+    public void onOptionSelected(Option option) {
+        // we know that all options are ModeOption here
+        ModeOption modeOption = (ModeOption) option;
+        Mode mode = modeOption.getMode();
+        mLastSelectedMode = mode;
+        if (!mode.equals(mCameraModeManager.getCurrentMode())) {
+            mCameraModeManager.clearCurrentMode(this);
+            mCameraModeManager.setCurrentMode(this, mode);
+            mCaptureButton.setImageResource(modeOption.getBigIconResourceId());
+        }
+        showModeTitle(this, modeOption.getTitleResourceId());
+        hideOptionBar();
+    }
+
+    private OnTouchListener mCaptureButtonTouchListener = new OnTouchListener() {
+
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            dispatchCaptureEvent(event);
+            return false;
+        }
+
+    };
+
+    private void dispatchCaptureEvent(MotionEvent event) {
+        AbstractMode mode = mCameraModeManager.getCurrentIMode();
+        
+        // [NVCAMERA-100] fix. Sometimes happening that we haven't current mode.
+        // we actually don't know why but we ignore touch in this case.
+        if (mode == null) {
+        	Log.w(TAG, "if you see it you know that it is the case for [NVCAMERA-100]. Please report if it is the cause for some issue.");
+        	return ;
+        }
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_UP:
+                mode.stop();
+                break;
+            case MotionEvent.ACTION_DOWN:
+                hideOptionBar();
+                mode.start();
+                break;
+        }
+    }
+    
+    private OnClickListener mThumbnailClickListener = new BlockingClickListener(new OnClickListener() {
+        
+        @Override
+        public void onClick(View v) {
+            mThumbnailLoader.openGallery();
+        }
+        
+    });
+    
+    private OnTouchListener mRootTouchListener = new OnTouchListener() {
+        
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            if (mBigButton.getVisibility() == View.VISIBLE) {
+                dispatchCaptureEvent(event);
+            }
+            return false;
+        }
+        
+    };
+    
+    public void setFaceDetectionFragment(boolean isVisible) 
+    {
+    	FragmentManager fragmentManager = getFragmentManager();
+    	FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
+		if (isVisible) {
+    		if (mFaceDetectionFragment == null) {
+    			mFaceDetectionFragment = new FaceDetectionFragment();
+    			fragmentTransaction.add(R.id.face_decector_holder, mFaceDetectionFragment, "FocusOnTabFragmentTag");
+    		} else {
+    			mFaceDetectionFragment = new FaceDetectionFragment();
+    			fragmentTransaction.replace(R.id.face_decector_holder, mFaceDetectionFragment, "FocusOnTabFragmentTag");
+    		}
+    	} else {
+    		if (mFaceDetectionFragment != null) {
+        		fragmentTransaction.remove(mFaceDetectionFragment);
+        		mFaceDetectionFragment = null;
+        	}
+    	}
+    	fragmentTransaction.commit();
+	}
+    
+    public void setFocusExposureOnTabFragmen(boolean isVisible) 
+    {
+    	FragmentManager fragmentManager = getFragmentManager();
+    	FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
+		if (isVisible) {
+    		if (mPreCurrentFace == null) {
+    			mPreCurrentFace = new FocusExposureOnTapFragment();
+    			fragmentTransaction.add(R.id.pre_previewholder, mPreCurrentFace, "FocusOnTabFragmentTag");
+    		} else {
+    			mPreCurrentFace = new FocusExposureOnTapFragment();
+    			fragmentTransaction.replace(R.id.pre_previewholder, mPreCurrentFace, "FocusOnTabFragmentTag");
+    		}
+    	} else {
+    		if (mPreCurrentFace != null) {
+        		fragmentTransaction.remove(mPreCurrentFace);
+        		mPreCurrentFace = null;
+        	}
+    	}
+    	fragmentTransaction.commit();
+	}
+    
+    @Override
+    public void onChecked(boolean checked) {
+        if (mIsVideoMode != checked) {
+            mIsVideoMode = checked;
+            fillOptionBar();
+        }
+    }
+    
+    public void setBigButtonVisibility(boolean isVisible) {
+        mBigButton.setVisibility(isVisible ? View.VISIBLE : View.GONE);
+        setFocusExposureOnTabFragmen(!isVisible);
+    }
+    
+    public ImageButton getCaptureButton() {
+        return mCaptureButton;
+    }
+    
+    public TextView getVideoTimerView() {
+        return mVideoTimerView;
+    }
+
+    /**
+     * Swaps camera from back to front one and vice versa.
+     * 
+     * @param view
+     */
+    public void swapCamera(View view) {
+        blockUserInteraction(true);
+    	mCameraModeManager.getCurrentIMode().swapCamera();
+    }
+    
+    public void enableSwapCamera(boolean enable) {
+    	mSwapCameraButton.setEnabled(enable);
+    }
+    
+    /**
+     * Shows/hides horizon.
+     * 
+     * @param view
+     */
+    public void showHorizon(View view) {
+    	FragmentManager fragmentManager = getFragmentManager();
+    	FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
+    	ImageButton btn = (ImageButton) view;
+    	if (!isHorizonActivated) {
+    		btn.setActivated(true);
+    		if (mHorizonFragment == null) {
+    			mHorizonFragment = new HorizonFragment();
+    			fragmentTransaction.add(R.id.horizon_grid_holder, mHorizonFragment, "HorizonFragmentTag");
+    		} else {
+    			mHorizonFragment = new HorizonFragment();
+    			fragmentTransaction.replace(R.id.horizon_grid_holder, mHorizonFragment, "HorizonFragmentTag");
+    		}
+    		isHorizonActivated = true;
+    	} else {
+    		btn.setActivated(false);
+    		if (mHorizonFragment != null) {
+        		fragmentTransaction.remove(mHorizonFragment);
+        		mHorizonFragment = null;
+        	}
+    		isHorizonActivated = false;
+    	}
+    	fragmentTransaction.commit();
+    }
+
+	public CameraModeManager getCameraModeManager() {
+	    return mCameraModeManager;
+	}
+
+	@Override
+	public void onSwitch(View view, Variant variant) {
+		Log.d(TAG, "switch flash light mode");
+		CameraHolder.getInstance().getCurrentCamera().setFlashlight(variant.getValue());
+	}
+	
+    private static final Variant[] FLASHLIGHT_VARIANTS = {
+            new Variant(R.drawable.icon_30_flash_off, "off"),
+            new Variant(R.drawable.icon_30_flash, "on"),
+            new Variant(R.drawable.icon_30_flash_auto, "auto"),
+            new Variant(R.drawable.icon_30_flashlight, "torch")
+    };
+	
+	private void initFlashLightMode() {
+	    boolean flashLightButtonVisible = false;
+	    Log.d(TAG, "init flash light mode");
+	    String[] modes = CameraHolder.getInstance().getCurrentCamera().getFlashLightModes();
+	    String selected = CameraHolder.getInstance().getCurrentCamera().getFlashLightMode();
+	    Variant selectedMode = null;
+	    if (modes != null && modes.length > 0) {
+    	    Set<String> modesSet = new HashSet<String>(Arrays.asList(modes));
+    	    List<Variant> supportedVariants = new ArrayList<Variant>();
+    	    for (Variant variant : FLASHLIGHT_VARIANTS) {
+    	        if (modesSet.contains(variant.getValue())) {
+    	            supportedVariants.add(variant);
+    	        }
+    	        if (variant.getValue().equals(selected)) {
+    	        	selectedMode = variant;
+    	        }
+    	    }
+    	    if (supportedVariants.size() > 1) {
+    	        mFlashLightModeButton.setSequence(supportedVariants, selectedMode);
+    	        flashLightButtonVisible = true;
+    	    }
+	    }
+	    mFlashLightModeButton.setVisibility(flashLightButtonVisible ? View.VISIBLE : View.GONE);
+	}
+	
+	private static final Variant[] FACE_DETECTION_VARIANTS = {
+        new Variant(R.drawable.icon_30_face_detection, "off"),
+        new Variant(R.drawable.icon_30_face_detection_activated, "on")
+	};
+	
+	// TODO maybe to remove
+	/*private void initFaceDetection() 
+	{
+	    if (CameraHolder.getInstance().getCurrentCamera().getParameters().getMaxNumDetectedFaces() > 0) {
+	    	mFaceDetectionButton.removeAllOnSwitchListeneres();
+	    	mFaceDetectionButton.setSequence(Arrays.asList(FACE_DETECTION_VARIANTS), null);
+	    	mFaceDetectionButton.addOnSwitchListener(new OnSwitchListener() {
+				@Override
+				public void onSwitch(View view, Variant value) {
+					if (value.getValue().equals("on")) {
+						CameraHolder.getInstance().getCurrentCamera().startFaceDetection();
+						FeatureManager.getInstance().setFaceDetectionState(true);
+					} else {
+						CameraHolder.getInstance().getCurrentCamera().stopFaceDetection();
+						FeatureManager.getInstance().setFaceDetectionState(false);
+					}
+				}
+			});
+	    	mFaceDetectionButton.setVariant(FeatureManager.getInstance().getFaceDetectionState() ? "on" : "off");
+	    }
+	    //mFaceDetectionButton.setVisibility(View.GONE);
+	}*/
+	
+	public void enableFaceDetection(boolean visible) 
+	{
+		Log.e("", "enableFaceDetection " + visible);
+		if (visible) {
+			Log.e("", "STG_FACE_DETECTION_ON_OFF " + ApplicationSettings.getInstance().getPreferences().getBoolean(ApplicationSettings.STG_FACE_DETECTION_ON_OFF, false));
+			visible = ApplicationSettings.getInstance().getPreferences().getBoolean(ApplicationSettings.STG_FACE_DETECTION_ON_OFF, false);
+			
+		}
+		setFaceDetectionFragment(visible);
+	}
+	
+	private OnTouchListener mCloseOptionbarTouchListener = new OnTouchListener() {
+        
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            hideOptionBar();
+            return false;
+        }
+    };
+    
+    public void hideOptionBar() {
+        mMediator.hideOptionBar();
+    }
+    
+    private void showModeTitle(Context context, int modeTitleId) {
+        if (mModeTitleToast != null) {
+            mModeTitleToast.cancel();
+        }
+        
+        AbstractMode mode = mCameraModeManager.getCurrentIMode();
+        if (mode.isCustomTitlePresentation()) {
+            mode.setModeTitle(modeTitleId);
+        } else {
+            mModeTitleToast = new ModeTitleToast(context);
+            int marginRight = getResources().getDimensionPixelSize(R.dimen.toast_title_margin_right);
+            mModeTitleToast.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL, marginRight, 0);
+            mModeTitleToast.setTitle(modeTitleId);
+            mModeTitleToast.show();   
+        }
+    }
+    
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        Log.v(TAG, "dispatchTouchEvent");
+        if (mBlockUserInteraction) {
+            return true;
+        } else {
+            return super.dispatchTouchEvent(ev);
+        }
+    }
+    
+    private void blockUserInteraction(boolean blocked) {
+        mBlockUserInteraction = blocked;
+        Log.v(TAG, "user interaction is blocked: " + blocked);
+    }
+    
+    private OnClickListener mMultiSwitchClickListener = new BlockingClickListener(new OnClickListener() {
+        
+        @Override
+        public void onClick(View v) {
+            ((MultiSwitchButton) v).switchToNext();
+        }
+        
+    });
+    
+    private OnClickListener mOptionBarButtonClickListener = new BlockingClickListener(new OnClickListener() {
+
+        @Override
+        public void onClick(View v) {
+            mMediator.toggleOptionBar();
+        }
+
+    });
+    
+    private OnClickListener mSwitchCompositionClickListener = new BlockingClickListener(new OnClickListener() {
+        
+        @Override
+        public void onClick(View v) {
+            final CompositionAdapter adapter = new CompositionAdapter(mCompositions);
+            final ListPopupWindow popup = new ListPopupWindow(CaptureActivity.this);
+            popup.setAdapter(adapter);
+            popup.setAnchorView(mSwitchCompositionButton);
+            popup.setHorizontalOffset(mSwitchCompositionButton.getWidth());
+            popup.setVerticalOffset(mSwitchCompositionButton.getHeight() * -2);
+            popup.setModal(true);
+            popup.setWidth(350); // TODO : dirty hack, but I cannot make it auto-adjustable for now.
+            popup.setOnItemClickListener(new OnItemClickListener() {
+                @Override
+                public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                    Log.d(TAG, "item has been clicked " + position);
+                    mCompositions.get(position).switchTo();
+                    popup.dismiss();
+                    checkComposition();
+                }
+            });
+            
+            popup.show();
+        }
+    });
+    
+    private OnClickListener mXFunctionsClickListener = new BlockingClickListener(new OnClickListener() {
+        
+        @Override
+        public void onClick(View v) {
+            final ListPopupWindow popup = new ListPopupWindow(CaptureActivity.this);
+            String[] modes = FeatureManager.getInstance().getSupportedValues(FeatureManager.EFFECT);
+            mPreCaptureEffects.clear();
+            // effect none is obviously presented and it must be first in the list
+            Integer[] ids = mEffectsDicionary.get(Parameters.EFFECT_NONE);
+            mPreCaptureEffects.add(new PreCaptureFilter(ids[0], ids[1], Parameters.EFFECT_NONE));
+            for (String mode : modes) {
+                // add only those modes that we have resource for icons and titles and prevent 
+                // adding none mode for the scond time
+                if (mEffectsDicionary.containsKey(mode) && !mode.equals(Parameters.EFFECT_NONE)) {
+                    ids = mEffectsDicionary.get(mode);
+                    mPreCaptureEffects.add(new PreCaptureFilter(ids[0], ids[1], mode));
+                }
+            }
+            // save current effect
+            mCurrentPreCaptureEffect = CameraHolder.getInstance().getCurrentCamera().getParameters().get(FeatureManager.EFFECT);
+            PreCaptureAdapter adapter1 = new PreCaptureAdapter(mPreCaptureEffects);
+            popup.setAdapter(adapter1);
+            popup.setAnchorView(mXFunctions);
+            popup.setHorizontalOffset(mSwitchCompositionButton.getWidth());
+            popup.setVerticalOffset(mSwitchCompositionButton.getHeight() * -2);
+            popup.setModal(true);
+            popup.setWidth(350); // TODO : dirty hack, but I cannot make it auto-adjustable for now.
+            popup.setOnItemClickListener(new OnItemClickListener() {
+                @Override
+                public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                    Log.d(TAG, "item has been clicked " + position);
+                    mPreCaptureEffects.get(position).switchTo();
+                    popup.dismiss();
+                    checkPreCaptureFilters();
+                }
+            });
+            
+            popup.show();
+            
+        }
+    });
+    
+    class BlockingClickListener implements OnClickListener {
+
+        private OnClickListener mListener;
+        
+        BlockingClickListener(OnClickListener listener) {
+            mListener = listener;
+        }
+        
+        @Override
+        public void onClick(View v) {
+            if (!mBlockUserInteraction) {
+                mListener.onClick(v);
+            }
+        }
+        
+    }
+    
+    class BlockingCheckedListener implements OnCheckedListener {
+
+        private OnCheckedListener mListener;
+        
+        BlockingCheckedListener(OnCheckedListener listener) {
+            mListener = listener;
+        }
+        
+        @Override
+        public void onChecked(boolean checked) {
+            if (!mBlockUserInteraction) {
+                mListener.onChecked(checked);
+            }
+        }
+        
+    }
+    
+}

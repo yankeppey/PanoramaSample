@@ -1,0 +1,28 @@
+package com.nv.camera.settings;
+
+import android.app.Fragment;
+import com.nv.camera.panorama.PanoramaFragment;
+
+public class PanoramaMode extends AbstractMode {
+
+	@Override
+	public void start() {
+
+	}
+
+	@Override
+	public void stop() {
+
+	}
+
+	@Override
+	protected void unload() {
+
+	}
+
+	@Override
+	protected Class<? extends Fragment> getFragmentClass() {
+		return PanoramaFragment.class;
+	}
+
+}

@@ -1,0 +1,123 @@
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- activity_capture.xml -->
+    <integer name="camerabar_animation_duration">100</integer>
+    <integer name="optionbar_animation_duration">100</integer>
+    <dimen name="optionbar_margin_right">-184dp</dimen>
+    <dimen name="btn_optionbar_margin_bottom">63dp</dimen>
+    <dimen name="toast_title_margin_right">120dp</dimen>
+
+    <!-- fragment_image_grid.xml -->
+    <dimen name="image_thumbnail_size">100dp</dimen>
+    <dimen name="image_thumbnail_spacing">1dp</dimen>
+    <dimen name="image_detail_pager_margin">80dp</dimen>
+    
+    <!-- navbar-->
+    <dimen name="navbar_height">45dp</dimen>
+    <dimen name="navbar_leftmost_item_margin">10dp</dimen>
+    <dimen name="navbar_rightmost_item_margin">10dp</dimen>
+    <dimen name="navbar_item_interspace">30dp</dimen>
+    <dimen name="navbar_mode_margin_side">2dp</dimen>
+    
+    <!-- info_panel -->
+    <dimen name="info_panel_width">345dp</dimen>
+    <dimen name="info_panel_height">305dp</dimen>
+    <dimen name="info_panel_labels_height">33dp</dimen>
+    <dimen name="info_panel_button_margin">10dp</dimen>
+    <dimen name="info_panel_histogram_labels">32dp</dimen>
+    
+    <!-- optionbar -->
+    <dimen name="optionbar_scroller_width_land">750dp</dimen>
+    <dimen name="optionbar_scroller_width_port">450dp</dimen>
+    <dimen name="optionbar_scroller_width">@dimen/optionbar_scroller_width_land</dimen>
+    <dimen name="optionbar_frame_sides_margin_top">0dp</dimen>
+    <dimen name="optionbar_frame_left_margin_right">-187dp</dimen>
+    <dimen name="optionbar_frame_right_margin_left">-193dp</dimen>
+    <dimen name="optionbar_content_margin_top">3dp</dimen>
+    
+    <!-- awesomebar -->
+    <dimen name="awesomebar_content_side_padding">75dp</dimen>
+    
+    <!-- the additional dimensions from dialog_share_settings.xml -->
+    <dimen name="dialog_share_settings_width">560dp</dimen>
+    <dimen name="dialog_share_settings_height">670dp</dimen>
+    <dimen name="dialog_share_settings_title_textsize">24sp</dimen>
+    <dimen name="dialog_share_settings_description_area_height">140dp</dimen>
+    <dimen name="dialog_share_settings_description_title_height">35dp</dimen>
+    <dimen name="dialog_share_settings_description_title_text_lr_padding">10dp</dimen>
+    <dimen name="dialog_share_settings_description_caption_text_t_padding">8dp</dimen>
+    <dimen name="dialog_share_settings_description_title_text_size">11sp</dimen>
+    <dimen name="dialog_share_settings_description_text_separator_height">4dp</dimen>
+    <dimen name="dialog_share_settings_description_text_separator_l_margin">10dp</dimen>
+    <dimen name="dialog_share_settings_description_text_separator_r_margin">120dp</dimen>
+    <dimen name="dialog_share_settings_description_lr_margin">20dp</dimen>
+    <dimen name="dialog_share_settings_description_t_margin">20dp</dimen>
+    <dimen name="dialog_share_settings_description_with_title_t_padding">45dp</dimen>
+    <dimen name="dialog_share_settings_description_with_title_l_padding">67dp</dimen>
+    <dimen name="dialog_share_settings_description_l_padding">20dp</dimen>
+    <dimen name="dialog_share_settings_description_t_padding">20dp</dimen>
+    <dimen name="dialog_share_settings_description_r_padding">20dp</dimen>
+    <dimen name="dialog_share_settings_description_bb_padding">10dp</dimen>
+    <dimen name="dialog_share_settings_description_b_padding">30dp</dimen>
+    <dimen name="dialog_share_settings_description_textsize">14sp</dimen>
+    <dimen name="dialog_share_settings_cell_height">60dp</dimen>
+    <dimen name="dialog_share_settings_cell_t_margin">20dp</dimen>
+    <dimen name="dialog_share_settings_cell_lr_padding">30dp</dimen>
+    <dimen name="dialog_share_settings_cell_textsize">20sp</dimen>
+    <dimen name="dialog_share_settings_cell_sub_textsize">14sp</dimen>
+    <dimen name="dialog_share_settings_cell_subsub_textsize">12sp</dimen>
+    <dimen name="dialog_share_settings_photo_preview_height">98dp</dimen>
+    <dimen name="dialog_share_settings_photo_preview_width">98dp</dimen>
+    <dimen name="dialog_share_settings_photo_content_text_size">30sp</dimen>
+    <dimen name="dialog_share_settings_photo_content_types_text_size">12sp</dimen>
+    <dimen name="dialog_share_settings_photo_content_types_text_t_padding">20dp</dimen>
+    <dimen name="dialog_share_settings_photo_content_text_b_padding">40dp</dimen>
+    <dimen name="dialog_share_settings_badge_character_text_lr_padding">5dp</dimen>
+    <dimen name="dialog_share_settings_badge_character_text_lb_margin">7dp</dimen>
+    <dimen name="dialog_share_settings_badge_character_text_size">8sp</dimen>
+    <dimen name="dialog_share_settings_progressbar_size">50dp</dimen>
+    
+    <!-- view_timer.xml -->
+    <dimen name="timer_button_margin">15dp</dimen>
+    <dimen name="timer_circle_radius">56dp</dimen>
+    <dimen name="timer_circle_stroke">3dp</dimen>
+    <color name="timer_circle_background">#20ffffff</color>
+    <color name="timer_circle_foreground">#ffffffff</color>
+    
+    <!-- big capture button dimensions -->
+    <dimen name="big_capture_button_width">300dp</dimen>
+    <dimen name="big_capture_button_height">300dp</dimen>
+    <dimen name="big_capture_button_inner_radius">140dp</dimen>
+    <dimen name="big_capture_button_ring_thickness">10dp</dimen>
+    
+    <!-- priview tiles parameters -->
+    <dimen name="preview_tile_container_spacing">1dp</dimen>
+    
+    <!-- focus and exposure on tap text background height -->
+    <dimen name="focus_exposure_bg_height">22dp</dimen>
+    
+    <!-- media picker -->
+    <dimen name="media_picker_height">37dp</dimen> 
+    <dimen name="media_picker_width">250dp</dimen>
+    <dimen name="media_picker_mbt">5dp</dimen>
+    <dimen name="media_picker_btn_plr">10dp</dimen>
+    
+    <!-- Stroke circle width for face detection view-->
+    <dimen name="face_detection_stroke_width">2dp</dimen>
+    
+    <!-- settings view-->
+    <dimen name="settings_item_width">300dp</dimen>
+    <dimen name="settings_item_height">52dp</dimen>
+    <dimen name="settings_window_height">500dp</dimen>
+    
+    <!-- view_media_grid_item.xml -->
+    <dimen name="image_min_height">80dp</dimen>
+    <dimen name="image_min_width">80dp</dimen>
+    
+    <!-- activity_image_grid.xml -->
+    <dimen name="status_bar_height">25dp</dimen>
+    <dimen name="status_bar_title_text_size">16sp</dimen>
+    
+</resources>
